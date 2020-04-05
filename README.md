@@ -3,11 +3,11 @@
 #### Small wizard for OpenVPN
 This shell script is a small configurator for OpenVPN.
 It allows to manage servers, certification authorities and clients.
-It is intended for users who do not want to struggle with technical details
+It is intended for users who do not want to struggle with technical details.
 
 ## Installation
-It requires to install `dialog`
-As _root_, run
+It requires to install `dialog`.
+As _root_, run:
 ```
 # git clone gesOVPN
 # mv gesOVPN/gesOVPN.sh /usr/local/sbin
@@ -15,7 +15,7 @@ As _root_, run
 ```
 ## Features
 All the features are through menus, no other commands need to be used.
-- Configure one o more servers, then enable, disasble, start, stop.
+- Configure one o more servers, then enable, disable, start, stop.
 - Configure CAs.
 - Create files for clients, with optional password.
 - Set Static IPs for clients.
@@ -27,8 +27,8 @@ Simply run `gesOVPN.sh`.
 - Next form allows to setup your certification authority (CA).
 - Then you can generate `.ovpn` files for your first client.
 
-Be patient with DH params generation
+Be patient with DH params generation.
 
 ## Next use
 Simply run `gesOVPN.sh`. Now you can select an existing server or create one.
-Several servers can share the same CA, but clients can be selectively blocked for each server.
+Several servers can share the same CA, considering that clients can be selectively blocked for each server.
