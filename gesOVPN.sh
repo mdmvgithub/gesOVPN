@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -x
 
 # by mm AT nisu.org
 
@@ -137,49 +137,46 @@ camb_pw_pk () {
 }
 
 set_ca () {
-  local err x v nodes pwca2 cconf=$'cn\no\nou\nl\nst\nc'
-  err=1
+  local x v nodes pwca2 cconf=$'cn\no\nou\nl\nst\nc'
   for v in fn $cconf; do # ahora mismo no sirve peroes por si se quiere copiar de otra
     eval local ca_n_$v ca_p_$v
     eval ca_n_$v=\$ca_$v
     eval ca_p_$v=\$ca_$v
   done
-  while [ "$err" ]; do
-    err=''  
+  while true ; do
     x=$(dialog --keep-tite --stdout --backtitle "$BCKTIT" \
         --title "CA settings" \
         --form "Setting CA - Certification Authority" 15 55 0 \
-               "    Friendly name" 1 1 "${ca_n_fn:-my_ca}" 1 19 ${ca_p_fn:-3}0 0 \
-               "          CA Name" 2 1 "${ca_n_cn:-VPN}"     2 19 30 0 \
-               "     Organization" 3 1 "$ca_n_o"           3 19 30 0 \
-               "Organization Unit" 4 1 "${ca_n_ou:-VPN}"   4 19 30 0 \
-               "         Locality" 5 1 "$ca_n_l"           5 19 30 0 \
-               "State or Privince" 6 1 "$ca_n_st"          6 19 30 0 \
-               "          Country" 7 1 "$ca_n_c"           7 19 3 0
+               "Fullfill all the fields." 1 1 '' 1 1 0 0 \
+               "Friendly name is only for administration use." 2 1 '' 2 1 0 0 \
+               "It is not exposed to users" 3 1 '' 3 1 0 0 \
+               "    Friendly name"  4 1 "${ca_n_fn:-my_ca}" 4 19 ${ca_p_fn:-3}0 0 \
+               "          CA Name"  6 1 "${ca_n_cn:-VPN}"   6 19 30 0 \
+               "     Organization"  7 1 "$ca_n_o"           7 19 30 0 \
+               "Organization Unit"  8 1 "${ca_n_ou:-VPN}"   8 19 30 0 \
+               "         Locality"  9 1 "$ca_n_l"           9 19 30 0 \
+               "State or Privince" 10 1 "$ca_n_st"         10 19 30 0 \
+               "     Country (XX)" 11 1 "$ca_n_c"          11 19 3 0
      )
     [ "$x" ] || { ca_fn='' ; return 1; }
-    if echo "$x" | grep -q '^$' ; then 
-      err=1
-      continue
-    fi
+    echo "$x" | grep -q '^$' && continue 
     if [ "$ca_p_fn" ]; then
       read -d$'\1' -r ca_n_cn ca_n_o ca_n_ou ca_n_l ca_n_st ca_n_c < <(echo "$x")
     else
       read -d$'\1' -r ca_n_fn ca_n_cn ca_n_o ca_n_ou ca_n_l ca_n_st ca_n_c < <(echo "$x")
     fi
-    if [ ! "$ca_n_c" ]; then # miro el último
-      err=1
-      continue;
+    [ "$ca_n_c" ] || continue # miro el último, cosas de dialog
+    if [ "${#ca_n_c}" != 2 ]; then
+      avisa "Country must be a TWO letter code" Error
+      continue
     fi
     ca_n_fn=$(clean $ca_n_fn)
     [ "$ca_n_fn" ] || return 1
     if [ ! "$ca_p_fn" ] && [ -d "$GESOVPN/ca-$ca_n_fn" ]; then
-      dialog --keep-tite --stdout --backtitle "$BCKTIT" \
-        --title "Error" \
-        --msgbox "CA friendly name already exists" 15 55
-      err=1
+      avisa "CA friendly name already exists" Error
       continue;
     fi
+    break
   done
   mkdir $GESOVPN/ca-$ca_n_fn 2>/dev/null
   nodes=''
@@ -204,86 +201,65 @@ set_ca () {
 
 set_srv () {
   local err x v sconf=$'cn\npc\npt\nwk\nmk\nca'; # io quitado
-  err=1
+  err=4 # para default item pero no me va
   for v in fn $sconf; do
     eval local sv_n_$v sv_p_$v
     eval sv_n_$v=\$sv_$v
     eval sv_p_$v=\$sv_$v
   done
-  while [ "$err" ]; do
-    err=''
+  while true; do
     x=$(dialog --keep-tite --stdout --backtitle "$BCKTIT" \
-        --title "Server settings" \
-        --form "Server definition" 16 55 0 \
-               "You can set an IP or DNS name for the server" 1 1 '' 1 1 0 0 \
-               "The best idea is use a DNS server name" 2 1 ''     2 1 0 0 \
-               "     Friendly name" 4 1 "${sv_n_fn:-my_server}"    4 20 ${sv_p_fn:-3}0 0 \
-               "  Server name / IP" 5 1 "$sv_n_cn"                 5 20 30 0 \
-               "Protocol (tcp/udp)" 6 1 "${sv_n_pc:-udp}"          6 20 4 3 \
-               "              Port" 7 1 "${sv_n_pt:-1194}"         7 20 6 5 \
-               "           Network" 8 1 "${sv_n_wk:-192.168.200.0}" 8 20 30 0 \
-               "      Netmask bits" 9 1 "${sv_n_mk:-24}" 9 20 3 0 \
+        --title "Server settings" --default-item $err \
+        --form "Server definition" 21 55 0 \
+               "Fullfill this form." 1 1 '' 1 1 0 0 \
+               "Friendly name is only for administration use." 2 1 '' 2 1 0 0 \
+               "It is not exposed to users" 3 1 '' 3 1 0 0 \
+               "     Friendly name"  4 1 "${sv_n_fn:-my_server}"      4 20 ${sv_p_fn:-3}0 0 \
+               "You can set an IP or DNS name for the server" 6 1 ''  6 1 0 0 \
+               "The best idea is use a DNS server name" 7 1 ''        7 1 0 0 \
+               "  Server name / IP"  8 1 "$sv_n_cn"                   8 20 30 0 \
+               "Protocol (tcp/udp)"  9 1 "${sv_n_pc:-udp}"            9 20 4 3 \
+               "              Port" 10 1 "${sv_n_pt:-1194}"          10 20 6 5 \
+               "Do not use 192.168.1.0/24 as is the usual home network" 12 1 '' 12 1 0 0 \
+               "           Network" 13 1 "${sv_n_wk:-192.168.200.0}" 13 20 30 0 \
+               "      Netmask bits" 14 1 "${sv_n_mk:-24}"            14 20 3 0 \
 
                #"  Fixed IPs offset" 10 1 '' 1 1 0 0 \
                #"           (min 6)" 11 1 "${sv_n_io:-6}" 11 20 6 5 
       )
-    [ "$x" ] || { sv_fn='' ; return 1; }
-    if echo "$x" | grep -q '^$' ; then 
-      err=1
-      continue
-    fi
+    [ "$x" ] || return 1
+    echo "$x" | grep -q '^$' && continue
     if [ "$sv_p_fn" ]; then
       read -d$'\1' -r sv_n_cn sv_n_pc sv_n_pt sv_n_wk sv_n_mk< <(echo "$x")
     else
       read -d$'\1' -r sv_n_fn sv_n_cn sv_n_pc sv_n_pt sv_n_wk sv_n_mk< <(echo "$x")
     fi
-    if [ ! "$sv_n_mk" ]; then # miro el último
-      err=1
-      continue;
-    fi
+    [ "$sv_n_mk" ] || continue # miro el último
     sv_n_fn=$(clean $sv_n_fn)
     [ "$sv_n_fn" ] || return 1
-    if [ ! "$sv_p_fn" ] && [ -d "server-$sv_n_fn" ]; then
-      dialog --keep-tite --stdout --backtitle "$BCKTIT" \
-        --title "Error" \
-        --msgbox "Server friendly name already exists" 15 55
-      err=1
+    if [ ! "$sv_p_fn" ] && [ -d "$GESOVPN/server-$sv_n_fn" ]; then
+      avisa "Server friendly name already exists" Error
       continue;
     fi
     if ! echo "$sv_n_cn" | grep -q -P '(?=^.{4,253}$)(^(?:[a-zA-Z0-9](?:(?:[a-zA-Z0-9\-]){0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$)' &&
        ! echo "$sv_n_cn" | grep -E '(([0-9]{1,3})\.){3}([0-9]{1,3}){1}' | grep -q -vE '25[6-9]|2[6-9][0-9]|[3-9][0-9][0-9]' ; then
-      dialog --keep-tite --stdout --backtitle "$BCKTIT" \
-        --title "Error" \
-        --msgbox "Enter vaid server name or IP" 15 55
-      err=1
+      avisa "Enter vaid server name or IP" Error
       continue;
     fi
     if [ "$sv_n_pc" != tcp -a "$sv_n_pc" != udp ]; then
-      dialog --keep-tite --stdout --backtitle "$BCKTIT" \
-        --title "Error" \
-        --msgbox "Protocol error" 15 55
-      err=1
+      avisa "Protocol error" Error
       continue;
     fi
     if [ "${sv_n_pt##[0-9]*}" ]; then
-      dialog --keep-tite --stdout --backtitle "$BCKTIT" \
-        --title "Error" \
-        --msgbox "Port error" 15 55
-      err=1
+      avisa "Port error" Error
       continue;
     fi
     if ! echo "$sv_n_wk" | grep -E '(([0-9]{1,3})\.){3}([0-9]{1,3}){1}' | grep -q -vE '25[6-9]|2[6-9][0-9]|[3-9][0-9][0-9]' ; then
-      dialog --keep-tite --stdout --backtitle "$BCKTIT" \
-        --title "Error" \
-        --msgbox "Network error" 15 55
-      err=1
+      avisa "Network error" Error
       continue;
     fi
-    if [ "${sv_n_mk##[0-9]*}" ] || [ $sv_n_mk -lt 16 -o $sv_n_mk -gt 27 ]; then
-      dialog --keep-tite --stdout --backtitle "$BCKTIT" \
-        --title "Error" \
-        --msgbox "Netmask error" 15 55
-      err=1
+    if [ "${sv_n_mk##[0-9]*}" ] || [ $sv_n_mk -lt 16 ] || [ $sv_n_mk -gt 27 ]; then
+      avisa "Netmask error" Error
       continue;
     fi
     #if [ "${sv_n_io##[0-9]*}" ] || [ "$sv_n_io" -lt 6 ]; then
@@ -295,14 +271,14 @@ set_srv () {
     #fi
     for f in $ls; do
       source $f/conf
-      if [ "$sv_cn$sv_pc$sv_pt" == "$sv_n_cn$sv_n_pc$sv_n_pt" -a "$sv_fn" != "$sv_n_fn" ]; then
+      if [ "$sv_pc$sv_pt" == "$sv_n_pc$sv_n_pt" ] && [ "${f%%*server-}" != "$sv_n_fn" ]; then
         dialog --keep-tite --stdout --backtitle "$BCKTIT" \
-          --title "Error" \
-          --msgbox "There exist another server with same definition" 15 55
-        err=1
-        break
+        --yesno "There exist another server with $sv_n_pc / $sv_n_pt"$'\n'"To keep this config you must manually bind server to local IP" 15 55 \
+        --title "Warning" &&
+          break || err=9 && continue 2
       fi
     done
+    break
   done
   if [ "$sv_p_fn" ]; then
     if [ "$sv_p_fn" != "$sv_n_fn" ]; then
@@ -566,7 +542,14 @@ opw=$PWD
 [ -d $wkd ] ||
   error "Broken openvpn installation, /etc/openvpn does not exist"
 cd $wkd
-trap 'stty icrnl onlcr icanon echo ; echo Logs in $wkd/$log' exit
+
+trap_exit () {
+  stty icrnl onlcr icanon echo
+  [ "$gendh" ] && wait $gendh > >(espera $'Still generating DH params\nIt can take a lot of time')
+  echo Logs in $wkd/$log
+}
+trap trap_exit exit
+
 if [ ! -d $GESOVPN ]; then
   dialog  --keep-tite --stdout --backtitle "$BCKTIT" \
     --title "Starting" \
@@ -578,9 +561,10 @@ if [ ! -d $GESOVPN ]; then
 fi
 log=$GESOVPN/log/$(date +%Y-%m-%d)-$$.log
 exec 2>$log
-[ -f $GESOVPN/dh.pem ] ||
-  openssl dhparam -out $GESOVPN/dh.pem 2048 > >(espera "Generating DH params") ||
-      error $'Error generating DH params\nThis will take a lot of time'
+if [ ! -s $GESOVPN/dh.pem ]; then
+  openssl dhparam -out $GESOVPN/dh.pem 2048 & gendh=$!
+  avisa $'Generating DH params in background\nThis is done only once, but can take a lot of time'
+fi
 
 while true; do 
   ls=$(ls -d $GESOVPN/server-* 2>/dev/null)
@@ -611,15 +595,15 @@ while true; do
       ac=$(eval dialog --keep-tite --stdout --backtitle "'$BCKTIT'" \
               --title "'Action'" \
               --menu '"Select action" 15 55 0' \
-                     '"Manage server clients" "" "Reconfigure server" ""' \
                      $([ -f "$sv_fn.conf-disabled" ] && echo '"Enable server" ""') \
-                     $([ -f "$sv_fn.conf" ] && echo '"Start server" "" "Stop server" "" "Disable server" ""') \
+                     $([ -f "$sv_fn.conf" ] && echo '"Reconfigure server" "" "Start server" "" "Stop server" "" "Disable server" ""') \
+                     '"Manage CA clients" ""' \
                      '"Change CA password" ""')
       case ${ac:0:3} in
         Man) set_cli ;;
         Rec) set_srv ;;
-        Sta) start;;
-        Sto) stop;;
+        Sta) start ;;
+        Sto) stop ;;
         Ena) mv -i $sv_fn.conf-disabled $sv_fn.conf </dev/null
              systemd ;;
         Dis) stop
@@ -634,9 +618,12 @@ while true; do
       esac
     done
   else
-    set_srv
-    [ "$sv_fn" ] || continue
+    if ! set_srv ; then
+      [ "$ls" ] && continue
+      exit
+    fi
     start
     set_cli
   fi
 done
+# TODO ver de quitar el err de set_svr
