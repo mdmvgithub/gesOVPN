@@ -1,4 +1,6 @@
-#!/bin/bash -x
+#!/bin/bash
+
+VERSION=0.9
 
 # by mm AT nisu.org
 
