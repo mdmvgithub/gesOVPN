@@ -94,7 +94,7 @@ lee_pwca () {
 # $1 fic $2 mens
 lee_pw_pk () {
   local pw err
-  echo '----' | openssl rsa -passin stdin -in $1 >/dev/null && echo -n '----' && return 0
+  echo '----' | openssl rsa -passin stdin -in $1 >/dev/null 2>&1 && echo -n '----' && return 0
   err=''
   while true; do
     pw=$(dialog --keep-tite --stdout --backtitle "$BCKTIT" \
@@ -130,11 +130,11 @@ lee_nw_pw () {
 camb_pw_pk () {
   local x
   [ "$$1" == "$2" ] && return 0
-  x=$(echo -n "$1" | openssl rsa -passin stdin -in $3) || return 1
+  x=$(echo -n "$1" | openssl rsa -passin stdin -in $3 >/dev/null 2>&1) || return 1
   if [ "$2" == '---' ]; then
-    echo "$x" | openssl rsa -out $3 || return 1
+    echo "$x" | openssl rsa -out $3 >&2 || return 1
   else
-    echo "$x" | openssl rsa -passout fd:3 -out $3 -aes256 3< <(echo -n "$2") || return 1
+    echo "$x" | openssl rsa -passout fd:3 -out $3 -aes256 >&2  3< <(echo -n "$2") || return 1
   fi
 }
 
@@ -148,7 +148,7 @@ set_ca () {
   while true ; do
     x=$(dialog --keep-tite --stdout --backtitle "$BCKTIT" \
         --title "CA settings" \
-        --form "Setting CA - Certification Authority" 15 55 0 \
+        --form "Setting CA - Certification Authority" 19 55 0 \
                "Fullfill all the fields." 1 1 '' 1 1 0 0 \
                "Friendly name is only for administration use." 2 1 '' 2 1 0 0 \
                "It is not exposed to users" 3 1 '' 3 1 0 0 \
@@ -193,7 +193,7 @@ set_ca () {
     openssl req -new -newkey rsa:2048 -keyout $GESOVPN/ca-$ca_n_fn/key.pem \
                 -subj "$(haz_subj ca_cn ca_o ca_ou ca_l ca_st ca_c)" \
                 -out $GESOVPN/ca-$ca_n_fn/ca.pem -x509 -passout stdin $nodes \
-                -days 36500 > >(espera "Generating CA cert") ||
+                -days 36500 > >(espera "Generating CA cert") >&2 ||
     { rm -rf $GESOVPN/ca-$ca_n_fn ; error "CA Certificate generation failed"; }
   touch $GESOVPN/ca-$ca_n_fn/index.txt
   openssl rand -hex 4 >$GESOVPN/ca-$ca_n_fn/serial
@@ -212,7 +212,7 @@ set_srv () {
   while true; do
     x=$(dialog --keep-tite --stdout --backtitle "$BCKTIT" \
         --title "Server settings" --default-item $err \
-        --form "Server definition" 21 55 0 \
+        --form "Server definition" 22 55 0 \
                "Fullfill this form." 1 1 '' 1 1 0 0 \
                "Friendly name is only for administration use." 2 1 '' 2 1 0 0 \
                "It is not exposed to users" 3 1 '' 3 1 0 0 \
@@ -222,9 +222,10 @@ set_srv () {
                "  Server name / IP"  8 1 "$sv_n_cn"                   8 20 30 0 \
                "Protocol (tcp/udp)"  9 1 "${sv_n_pc:-udp}"            9 20 4 3 \
                "              Port" 10 1 "${sv_n_pt:-1194}"          10 20 6 5 \
-               "Do not use 192.168.1.0/24 as is the usual home network" 12 1 '' 12 1 0 0 \
-               "           Network" 13 1 "${sv_n_wk:-192.168.200.0}" 13 20 30 0 \
-               "      Netmask bits" 14 1 "${sv_n_mk:-24}"            14 20 3 0 \
+               "Do not use 192.168.1.0/24 as it is the usual" 12 1 '' 12 1 0 0 \
+               "  home network" 13 1 '' 13 1 0 0 \
+               "           Network" 14 1 "${sv_n_wk:-192.168.200.0}" 14 20 30 0 \
+               "      Netmask bits" 15 1 "${sv_n_mk:-24}"            15 20 3 0 \
 
                #"  Fixed IPs offset" 10 1 '' 1 1 0 0 \
                #"           (min 6)" 11 1 "${sv_n_io:-6}" 11 20 6 5 
@@ -325,10 +326,10 @@ set_srv () {
     lee_pwca || return 1
     (openssl req -new -newkey rsa:2048 -keyout $GESOVPN/server-$sv_n_fn/key.pem -nodes \
                  -subj "$(haz_subj sv_cn ca_o ca_ou ca_l ca_st ca_c)" \
-                 -out $GESOVPN/server-$sv_n_fn/req.pem &&
+                 -out $GESOVPN/server-$sv_n_fn/req.pem >&2 &&
      echo -n "$pwca" | openssl ca -batch -in $GESOVPN/server-$sv_n_fn/req.pem  \
                 -out $GESOVPN/server-$sv_n_fn/cert.pem -config $GESOVPN/openssl.cnf \
-                -passin stdin
+                -passin stdin >&2
     ) > >(espera "Generating Server cert") ||
      { rm -rf $GESOVPN/server-$sv_n_fn ;
       error "Error generating certificate"; }
@@ -390,13 +391,13 @@ client
 tls-client
 compress lz4
 <cert>
-$(openssl x509 -in $GESOVPN/ca-$sv_ca/$cl_cn-crt.pem)
+$(openssl x509 -in $GESOVPN/ca-$sv_ca/$cl_cn-crt.pem >&2 )
 </cert>
 <key>
 $(cat $GESOVPN/ca-$sv_ca/$cl_cn-key.pem)
 </key>
 <ca>
-$(openssl x509 -in $GESOVPN/ca-$sv_ca/ca.pem)
+$(openssl x509 -in $GESOVPN/ca-$sv_ca/ca.pem >&2 )
 </ca>
 EOF
 )
@@ -411,7 +412,8 @@ set_cli () {
     x="Client-$ca_cn"
     ll=$(grep "^V.*OU=${x:0:64}" $GESOVPN/ca-$sv_ca/index.txt | sed -n \
              -e 's/^V\s\+[0-9]\+Z\s\+\([0-9A-F]\+\)\s\+.*CN=\(.*\)/\1:!\2/p')
-    cl=$(dialog --keep-tite --stdout --backtitle "$BCKTIT" \
+    if [ "$ll" ]; then
+      cl=$(dialog --keep-tite --stdout --backtitle "$BCKTIT" \
             --title "List of CA users" --default-item "$cl" \
             --menu "Select a user to reconfigure" 15 55 0 \
             $(for f in $ll ; do
@@ -420,14 +422,17 @@ set_cli () {
               done
              ) \
             "---" "New client"
-        )
-    [ "$cl" ] || return 1
+          )
+      [ "$cl" ] || return 1
+    else
+      cl='---'
+    fi
     if [ "$cl" == '---' ]; then
       err=''
       while true ; do
         x=$(dialog --keep-tite --stdout --backtitle "$BCKTIT" \
              --title "New client" --insecure \
-             --mixedform "Client" 15 55 0 \
+             --mixedform "Client setup" 15 55 0 \
                    "Use simple chars for Client name" 1 1 '' 1 1 0 0 0 \
                    "Client Name" 2 1 "$cn" 2 20 30 0 0 \
                    "Use --- for no password" 4 1 "" 4 1 0 0 0 \
@@ -457,10 +462,10 @@ set_cli () {
       lee_pwca || return 1
       (echo -n "$pwcl" | openssl req -new -newkey rsa:2048 -keyout $GESOVPN/ca-$ca_fn/$cn-key.pem \
                    -subj "$(haz_subj cl_cn ca_o cl_ou ca_l ca_st ca_c)" \
-                   -out $GESOVPN/ca-$ca_fn/$cn-req.pem -passout stdin $nodes &&
+                   -out $GESOVPN/ca-$ca_fn/$cn-req.pem -passout stdin $nodes >&2 &&
        echo -n "$pwca" | openssl ca -batch -in $GESOVPN/ca-$ca_fn/$cn-req.pem  \
                     -out $GESOVPN/ca-$ca_fn/$cn-crt.pem -config $GESOVPN/openssl.cnf \
-                    -passin stdin
+                    -passin stdin >&2 
       ) > >(espera "Generating Client cert") ||
        { rm -f $GESOVPN/ca-$ca_fn/$cn-{crt,key,req}.pem
         error "Error generating certificate"; }
@@ -478,7 +483,7 @@ set_cli () {
                      '"Rebuid $cl_cn.ovpn" ""' \
                      $([ -f $GESOVPN/server-$sv_fn/block/$[16#$cl] ] || echo '"Block for this server" ""') \
                      $([ -f $GESOVPN/server-$sv_fn/block/$[16#$cl] ] && echo '"Unblock for this server" ""') \
-                     $([ -f $GESOVPN/server-$sv_fn/cld/$cl_cn ] || echo '"Fixed IP" ""') \
+                     $([ -f $GESOVPN/server-$sv_fn/cld/$cl_cn ] || echo '"Static IP" ""') \
                      $([ -f $GESOVPN/server-$sv_fn/cld/$cl_cn ] && echo '"Dinamic IP" ""') \
                      '"Change password" ""'
           )
@@ -494,7 +499,7 @@ set_cli () {
             camb_pw_pk "$pwcl" "$pwcl2" "$f"
             cons_ovpn
             ;;
-        F)  local ci i t b b2 p ib ib2 ip='' ip1
+        S)  local ci i t b b2 p ib ib2 ip='' ip1
             ci=$(cd $GESOVPN/server-$sv_fn/cld
                  for f in * ; do
                    [ "$f" == "$cl_cn" ] || tr <$f '\n' ' '
@@ -516,11 +521,11 @@ set_cli () {
               fi
             done
             if [ ! "$ip" ]; then
-              avisa "Fixed pool exhausted, IP NOT defined"
+              avisa "Static pool exhausted, IP NOT defined"
               break
             fi
             echo "ifconfig-push $ip $ip1" >$GESOVPN/server-$sv_fn/cld/$cl_cn
-            avisa "Fixed IP: $ip"
+            avisa "Static IP: $ip"
             ;;
         D)  rm -f $GESOVPN/server-$sv_fn/cld/$cl_cn;;
         *)  break;;
