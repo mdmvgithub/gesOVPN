@@ -9,7 +9,7 @@ It is intended for users who do not want to struggle with technical details.
 It requires to install `dialog`.
 As _root_, run:
 ```
-# git clone gesOVPN
+# git clone https://github.com/mdmvgithub/gesOVPN.git
 # mv gesOVPN/gesOVPN.sh /usr/local/sbin
 # chmod 700 /usr/local/sbin/gesOVPN.sh
 ```
