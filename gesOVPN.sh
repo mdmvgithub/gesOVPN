@@ -130,7 +130,7 @@ lee_nw_pw () {
 camb_pw_pk () {
   local x
   [ "$$1" == "$2" ] && return 0
-  x=$(echo -n "$1" | openssl rsa -passin stdin -in $3 >/dev/null 2>&1) || return 1
+  x=$(echo -n "$1" | openssl rsa -passin stdin -in $3) || return 1
   if [ "$2" == '---' ]; then
     echo "$x" | openssl rsa -out $3 >&2 || return 1
   else
@@ -391,13 +391,13 @@ client
 tls-client
 compress lz4
 <cert>
-$(openssl x509 -in $GESOVPN/ca-$sv_ca/$cl_cn-crt.pem >&2 )
+$(openssl x509 -in $GESOVPN/ca-$sv_ca/$cl_cn-crt.pem)
 </cert>
 <key>
 $(cat $GESOVPN/ca-$sv_ca/$cl_cn-key.pem)
 </key>
 <ca>
-$(openssl x509 -in $GESOVPN/ca-$sv_ca/ca.pem >&2 )
+$(openssl x509 -in $GESOVPN/ca-$sv_ca/ca.pem)
 </ca>
 EOF
 )
@@ -629,7 +629,6 @@ while true; do
       [ "$ls" ] && continue
       exit
     fi
-    start
     set_cli
   fi
 done
