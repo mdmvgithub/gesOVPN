@@ -114,11 +114,11 @@ lee_nw_pw () {
   while true; do
     pw=$(dialog --keep-tite --stdout --backtitle "$BCKTIT" \
            --title "New password" --insecure \
-           --passwordbox $err$'\n'$1$'\nNew password (min 8)\nEnter --- for no password' 15 55 "" ) || return 1
+           --passwordbox $err$'\n'$1$'\nNew password (min 8)\nTo avoid password, type ---' 15 55 "" ) || return 1
     [ "$pw" == '---' ] && echo -n "$pw" && return 0
     pw2=$(dialog --keep-tite --stdout --backtitle "$BCKTIT" \
            --title "New password" --insecure \
-           --passwordbox 'Same passowrd again' 15 55 "" ) || return 1
+           --passwordbox 'The same passowrd again' 15 55 "" ) || return 1
     [ "$pw" == "$pw2" ] || { err='*** Mismatch ***' && continue; }
     [ "${#pw}" -ge 8 ] && break
     err='*** Short ***'
@@ -150,8 +150,8 @@ set_ca () {
         --title "CA settings" \
         --form "Setting CA - Certification Authority" 19 55 0 \
                "Fullfill all the fields." 1 1 '' 1 1 0 0 \
-               "Friendly name is only for administration use." 2 1 '' 2 1 0 0 \
-               "It is not exposed to users" 3 1 '' 3 1 0 0 \
+               "The friendly name is only for administration use." 2 1 '' 2 1 0 0 \
+               "It is not exposed to the users" 3 1 '' 3 1 0 0 \
                "    Friendly name"  4 1 "${ca_n_fn:-my_ca}" 4 19 ${ca_p_fn:-3}0 0 \
                "          CA Name"  6 1 "${ca_n_cn:-VPN}"   6 19 30 0 \
                "     Organization"  7 1 "$ca_n_o"           7 19 30 0 \
@@ -212,13 +212,13 @@ set_srv () {
   while true; do
     x=$(dialog --keep-tite --stdout --backtitle "$BCKTIT" \
         --title "Server settings" --default-item $err \
-        --form "Server definition" 22 55 0 \
+        --form "Server definition" 24 55 0 \
                "Fullfill this form." 1 1 '' 1 1 0 0 \
-               "Friendly name is only for administration use." 2 1 '' 2 1 0 0 \
-               "It is not exposed to users" 3 1 '' 3 1 0 0 \
+               "The friendly name is only for administration use." 2 1 '' 2 1 0 0 \
+               "It is not exposed to the users" 3 1 '' 3 1 0 0 \
                "     Friendly name"  4 1 "${sv_n_fn:-my_server}"      4 20 ${sv_p_fn:-3}0 0 \
-               "You can set an IP or DNS name for the server" 6 1 ''  6 1 0 0 \
-               "The best idea is use a DNS server name" 7 1 ''        7 1 0 0 \
+               "You can set an IP or a DNS name for the server" 6 1 ''  6 1 0 0 \
+               "The best idea is to use a DNS server name" 7 1 ''        7 1 0 0 \
                "  Server name / IP"  8 1 "$sv_n_cn"                   8 20 30 0 \
                "Protocol (tcp/udp)"  9 1 "${sv_n_pc:-udp}"            9 20 4 3 \
                "              Port" 10 1 "${sv_n_pt:-1194}"          10 20 6 5 \
@@ -414,8 +414,8 @@ set_cli () {
              -e 's/^V\s\+[0-9]\+Z\s\+\([0-9A-F]\+\)\s\+.*CN=\(.*\)/\1:!\2/p')
     if [ "$ll" ]; then
       cl=$(dialog --keep-tite --stdout --backtitle "$BCKTIT" \
-            --title "List of CA users" --default-item "$cl" \
-            --menu "Select a user to reconfigure" 15 55 0 \
+            --title "List of CA clients" --default-item "$cl" \
+            --menu "Select a client to reconfigure" 15 55 0 \
             $(for f in $ll ; do
                 echo ${f%%:!*}
                 echo ${f#*:!}
@@ -429,14 +429,15 @@ set_cli () {
     fi
     if [ "$cl" == '---' ]; then
       err=''
+      cn=''
       while true ; do
         x=$(dialog --keep-tite --stdout --backtitle "$BCKTIT" \
              --title "New client" --insecure \
              --mixedform "Client setup" 15 55 0 \
                    "Use simple chars for Client name" 1 1 '' 1 1 0 0 0 \
-                   "Client Name" 2 1 "$cn" 2 20 30 0 0 \
-                   "Use --- for no password" 4 1 "" 4 1 0 0 0 \
-                   "Password (min 8)" 5 1 "" 5 20 30 0 1 \
+                   "     Client Name" 2 1 "$cn" 2 19 30 0 0 \
+                   "To avoid password, type ---" 4 1 "" 4 1 0 0 0 \
+                   "Password (min 8)" 5 1 "" 5 19 30 0 1 \
                    "$err" 6 1 '' 6 1 0 0 0
            ) || return 1
         read -d$'\1' -r cn pwcl < <(echo "$x")
@@ -446,10 +447,10 @@ set_cli () {
           [ "${#pwcl}" -ge 8 ] || continue
           pwcl2=$(dialog --keep-tite --stdout --backtitle "$BCKTIT" \
                   --title "Password" --insecure \
-                  --passwordbox "Same password" 15 55 ""
+                  --passwordbox "The same password" 15 55 ""
                  ) || return 1
           [ "$pwcl" == "$pwcl2" ] && break
-          err="*** Password mismatch ***"
+          err="*** Passwords mismatch ***"
         else
           nodes='--nodes'
           break
@@ -479,7 +480,7 @@ set_cli () {
     while true; do
       ac=$(eval dialog --keep-tite --stdout --backtitle "'$BCKTIT'" \
               --title '"Action for the client"' \
-              --menu '"Select action for the client"' 15 55 0 \
+              --menu '"Select an action for the client"' 15 55 0 \
                      '"Rebuid $cl_cn.ovpn" ""' \
                      $([ -f $GESOVPN/server-$sv_fn/block/$[16#$cl] ] || echo '"Block for this server" ""') \
                      $([ -f $GESOVPN/server-$sv_fn/block/$[16#$cl] ] && echo '"Unblock for this server" ""') \
@@ -490,7 +491,7 @@ set_cli () {
       case ${ac:0:1} in
         R)  cons_ovpn ;;
         B)  touch $GESOVPN/server-$sv_fn/block/$[16#$cl]
-            avisa "It will take effect when client reconnects or when you restart server"
+            avisa "It will take effect when the client reconnects or when you restart server"
             ;;
         U)  rm -f $GESOVPN/server-$sv_fn/block/$[16#$cl] ;;
         C)  local f=$GESOVPN/ca-$ca_fn/$cl_cn-key.pem
@@ -551,8 +552,8 @@ opw=$PWD
 cd $wkd
 
 trap_exit () {
-  stty icrnl onlcr icanon echo
   [ "$gendh" ] && wait $gendh > >(espera $'Still generating DH params\nIt can take a lot of time')
+  stty icrnl onlcr icanon echo
   echo Logs in $wkd/$log
 }
 trap trap_exit exit
@@ -560,7 +561,7 @@ trap trap_exit exit
 if [ ! -d $GESOVPN ]; then
   dialog  --keep-tite --stdout --backtitle "$BCKTIT" \
     --title "Starting" \
-    --yesno $'Wellcome to openvpn easy configuration\nNow we will setup your first server and clients' 10 50 ||
+    --yesno $'Welcome to the openvpn easy configurator\nNow you will setup your first server and your clients' 10 55 ||
    exit
   mkdir $GESOVPN
   chmod 700 $GESOVPN
@@ -569,8 +570,8 @@ fi
 log=$GESOVPN/log/$(date +%Y-%m-%d)-$$.log
 exec 2>$log
 if [ ! -s $GESOVPN/dh.pem ]; then
-  openssl dhparam -out $GESOVPN/dh.pem 2048 & gendh=$!
-  avisa $'Generating DH params in background\nThis is done only once, but can take a lot of time'
+  nice openssl dhparam -out $GESOVPN/dh.pem 2048 & gendh=$!
+  avisa $'Generating DH params in background\nThis is done only once, but can take a long time'
 fi
 
 while true; do 
