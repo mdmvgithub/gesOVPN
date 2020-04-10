@@ -1,6 +1,6 @@
 #!/bin/bash
 
-VERSION=0.9
+VERSION=0.95
 
 # by mm AT nisu.org
 
@@ -25,13 +25,26 @@ espera () {
 clean () {
   echo $1 | sed -e 's/[^0-9a-zA-Z\._]/_/g'
 }
+dvnom () {
+  local p n s
+  n=$(clean $1)
+  n=${n%.*}; n="$n."
+  s=''
+  while [ "$n" ]; do
+    p=${n%%.*}
+    p=${p^?}
+    s="$s${p:0:3}"
+    n=${n#*.}
+  done
+  echo -n $s
+}
 
 systemd () {
   systemctl daemon-reload > >(espera "Configuring systemd")
 }
 start ()  {
   service openvpn@$sv_fn start > >(espera "Starting server") ||
-    error "Error starting server $sv_n_fn"
+    error "Error starting server $sv_fn"
 }
 stop ()  {
   service openvpn@$sv_fn stop  > >(espera "Stopping server")
@@ -88,7 +101,7 @@ EOF
 }
 
 lee_pwca () {
-  [ "$pwca" ] || pwca=$(lee_pw_pk $GESOVPN/ca-$ca_fn/key.pem "CA KEY password") || return 1
+  [ "$pwca" ] || pwca=$(lee_pw_pk $GESOVPN/ca-$ca_fn/key.pem "CA $ca_fn") || return 1
 }
 
 # $1 fic $2 mens
@@ -99,7 +112,7 @@ lee_pw_pk () {
   while true; do
     pw=$(dialog --keep-tite --stdout --backtitle "$BCKTIT" \
            --title "Password" --insecure \
-           --passwordbox "$err"$'\n\n'"$2" 15 55 ""
+           --passwordbox "$err"$'\n\n'"$2"$'\n'"Current key password" 15 55 ""
         ) || return 1
     err=''
     echo -n "$pw" | openssl rsa -passin stdin -noout -in $1 >/dev/null && break
@@ -114,7 +127,7 @@ lee_nw_pw () {
   while true; do
     pw=$(dialog --keep-tite --stdout --backtitle "$BCKTIT" \
            --title "New password" --insecure \
-           --passwordbox $err$'\n'$1$'\nNew password (min 8)\nTo avoid password, type ---' 15 55 "" ) || return 1
+           --passwordbox $err$'\n'$1$'\nThe new password (min 8)\nTo avoid password, type ---' 15 55 "" ) || return 1
     [ "$pw" == '---' ] && echo -n "$pw" && return 0
     pw2=$(dialog --keep-tite --stdout --backtitle "$BCKTIT" \
            --title "New password" --insecure \
@@ -337,8 +350,10 @@ set_srv () {
   sv_fn=$sv_n_fn
   ls=$(ls -d $GESOVPN/server-* 2>/dev/null)
   pwca=''
-  if [ ! -f "$sv_fn.conf" ]; then
-    cat >$sv_fn.conf <<EOF
+  fconf="$sv_fn.conf"
+  [ -f "$fconf-disabled" ] && fconf="$fconf-disabled"
+  if [ ! -f "$fconf" ]; then
+    cat >"$fconf" <<EOF
 status --
 log --
 port --
@@ -361,7 +376,7 @@ keepalive 10 120
 max-clients 60
 EOF
   fi
-  sed $sv_fn.conf -i \
+  sed $fconf -i \
     -e "s!^status .*!status /var/log/openvpn-status-$sv_fn.log!" \
     -e "s!^log .*!log /var/log/openvpn-$sv_fn.log!" \
     -e "s!^port .*!port $sv_pt!" \
@@ -375,7 +390,14 @@ EOF
     -e "s!^ifconfig-pool-persist .*!ifconfig-pool-persist /var/log/ipp-$sv_fn.txt!" \
     -e "s!^client-config-dir .*!client-config-dir $wkd/$GESOVPN/server-$sv_fn/cld!" \
     -e "s!^crl-verify .*!crl-verify $wkd/$GESOVPN/server-$sv_fn/block 'dir'!"
-  [ "$sv_p_fn" ] || { systemd ; start ; }
+  if [ ! "$sv_p_fn" ] ; then
+    if [ "$gendh" ]; then
+      pendstart=$sv_fn
+    else
+      systemd
+      start
+    fi
+  fi
 }
 
 cons_ovpn() {
@@ -385,7 +407,7 @@ remote $sv_cn $sv_pt $sv_pc
 nobind
 tls-version-min 1.1
 dev-type tun
-dev tun_$sv_fn
+dev tun$(dvnom $sv_cn)
 verify-x509-name $sv_cn name
 client
 tls-client
@@ -415,7 +437,7 @@ set_cli () {
     if [ "$ll" ]; then
       cl=$(dialog --keep-tite --stdout --backtitle "$BCKTIT" \
             --title "List of CA clients" --default-item "$cl" \
-            --menu "Select a client to reconfigure" 15 55 0 \
+            --menu "Select a client of $ca_fn" 15 55 0 \
             $(for f in $ll ; do
                 echo ${f%%:!*}
                 echo ${f#*:!}
@@ -480,7 +502,7 @@ set_cli () {
     while true; do
       ac=$(eval dialog --keep-tite --stdout --backtitle "'$BCKTIT'" \
               --title '"Action for the client"' \
-              --menu '"Select an action for the client"' 15 55 0 \
+              --menu '"Select an action for the client $cl_cn"' 15 55 0 \
                      '"Rebuid $cl_cn.ovpn" ""' \
                      $([ -f $GESOVPN/server-$sv_fn/block/$[16#$cl] ] || echo '"Block for this server" ""') \
                      $([ -f $GESOVPN/server-$sv_fn/block/$[16#$cl] ] && echo '"Unblock for this server" ""') \
@@ -495,12 +517,12 @@ set_cli () {
             ;;
         U)  rm -f $GESOVPN/server-$sv_fn/block/$[16#$cl] ;;
         C)  local f=$GESOVPN/ca-$ca_fn/$cl_cn-key.pem
-            pwcl=$(lee_pw_pk $f "Current key password") || break
-            pwcl2=$(lee_nw_pw)
+            pwcl=$(lee_pw_pk $f "Client $cl_cn") || break
+            pwcl2=$(lee_nw_pw "$cl_cn")
             camb_pw_pk "$pwcl" "$pwcl2" "$f"
             cons_ovpn
             ;;
-        S)  local ci i t b b2 p ib ib2 ip='' ip1
+        S)  local ci i t b b2 ba p ib ib2 ip='' ip1
             ci=$(cd $GESOVPN/server-$sv_fn/cld
                  for f in * ; do
                    [ "$f" == "$cl_cn" ] || tr <$f '\n' ' '
@@ -509,8 +531,8 @@ set_cli () {
             t=$[1<<(32-$sv_mk)] # mitad de ips
             b=${sv_wk##*.}
             b2=${sv_wk%.$b}; b2=${b2##*.}
-            p=${sv_wk%.$b2.$b}
-            for ((i=$[b2*256+b+t/2]+2; i<b2*256+b+t-2; i+=4)); do
+            p=${sv_wk%.$b2.$b}; ba=$[b2*256+b]
+            for ((i=ba+t-6; i >= ba+4 ; i+=4)); do
               ib2=$[i/256]
               ib=$[i%256]
               x=$p.$ib2.$ib
@@ -522,8 +544,11 @@ set_cli () {
               fi
             done
             if [ ! "$ip" ]; then
-              avisa "Static pool exhausted, IP NOT defined"
+              avisa "Static pool exhausted, IP NOT defined" Error
               break
+            fi
+            if [ "$i" -le $[ba+t/2] ]; then
+              avisa "You have consumed 1/2 of the total IP adress spectre" Warning
             fi
             echo "ifconfig-push $ip $ip1" >$GESOVPN/server-$sv_fn/cld/$cl_cn
             avisa "Static IP: $ip"
@@ -553,25 +578,25 @@ cd $wkd
 
 trap_exit () {
   [ "$gendh" ] && wait $gendh > >(espera $'Still generating DH params\nIt can take a lot of time')
+  [ "$pendstart" ] && sv_fn=$pendstart && systemd && start
   stty icrnl onlcr icanon echo
   echo Logs in $wkd/$log
 }
 trap trap_exit exit
-
-if [ ! -d $GESOVPN ]; then
+log=$GESOVPN/log/$(date +%Y-%m-%d)-$$.log
+if [ ! -s $GESOVPN/dh.pem ]; then
+  [ -d $GESOVPN ] || well=$'Welcome to the openvpn easy configurator\nNow you will setup your first server and your clients\n' || well=''
   dialog  --keep-tite --stdout --backtitle "$BCKTIT" \
     --title "Starting" \
-    --yesno $'Welcome to the openvpn easy configurator\nNow you will setup your first server and your clients' 10 55 ||
+    --yesno "$well"$'\nI will generate DH params in background\nThis is done only once, but can take a long time' 10 55 ||
    exit
-  mkdir $GESOVPN
+  mkdir $GESOVPN 2>/dev/null
   chmod 700 $GESOVPN
-  mkdir $GESOVPN/log
-fi
-log=$GESOVPN/log/$(date +%Y-%m-%d)-$$.log
-exec 2>$log
-if [ ! -s $GESOVPN/dh.pem ]; then
-  nice openssl dhparam -out $GESOVPN/dh.pem 2048 & gendh=$!
-  avisa $'Generating DH params in background\nThis is done only once, but can take a long time'
+  mkdir $GESOVPN/log 2>/dev/null
+  exec 2>$log
+  nice openssl dhparam -out $GESOVPN/dh.pem 2048 >&2 & gendh=$!
+else
+  exec 2>$log
 fi
 
 while true; do 
@@ -599,10 +624,11 @@ while true; do
     fi
   fi
   if [ "$sv_cn" ]; then
+    [ -f "$sv_fn.conf-disabled" ] && [ -f "$sv_fn.conf" ] && avisa "There exist both $sv_fn.conf and $sv_fn.conf-disabled"
     while true ; do
       ac=$(eval dialog --keep-tite --stdout --backtitle "'$BCKTIT'" \
               --title "'Action'" \
-              --menu '"Select action" 15 55 0' \
+              --menu '"Select action for $sv_fn" 15 55 0' \
                      $([ -f "$sv_fn.conf-disabled" ] && echo '"Enable server" ""') \
                      $([ -f "$sv_fn.conf" ] && echo '"Reconfigure server" "" "Start server" "" "Stop server" "" "Disable server" ""') \
                      '"Manage CA clients" ""' \
@@ -618,7 +644,7 @@ while true; do
              mv $sv_fn.conf $sv_fn.conf-disabled
              systemd ;;
         Cha) lee_pwca || break;
-             pwca2=$(lee_nw_pw) || break;
+             pwca2=$(lee_nw_pw "CA $ca_fn") || break;
              camb_pw_pk "$pwca" "$pwca2" "$GESOVPN/ca-$ca_fn/key.pem"
              pwca=$pwca2
              ;;
