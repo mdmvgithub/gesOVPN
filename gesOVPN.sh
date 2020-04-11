@@ -287,7 +287,7 @@ set_srv () {
     #fi
     for f in $ls; do
       source $f/conf
-      if [ "$sv_pc$sv_pt" == "$sv_n_pc$sv_n_pt" ] && [ "${f%%*server-}" != "$sv_n_fn" ]; then
+      if [ "$sv_pc$sv_pt" == "$sv_n_pc$sv_n_pt" ] && [ "${f##*server-}" != "$sv_n_fn" ]; then
         dialog --keep-tite --stdout --backtitle "$BCKTIT" \
         --yesno "There exist another server with $sv_n_pc / $sv_n_pt"$'\n'"To keep this config you must manually bind server to local IP" 15 55 \
         --title "Warning" &&
