@@ -353,6 +353,7 @@ set_srv () {
   fconf="$sv_fn.conf"
   [ -f "$fconf-disabled" ] && fconf="$fconf-disabled"
   if [ ! -f "$fconf" ]; then
+    openvpn --genkey --secret $GESOVPN/server-$sv_n_fn/takey.pem &
     cat >"$fconf" <<EOF
 status --
 log --
@@ -363,6 +364,7 @@ ca --
 cert --
 key --
 dh --
+tls-auth --
 server --
 crl-verify -- 'dir'
 ifconfig-pool-persist --
@@ -386,6 +388,7 @@ EOF
     -e "s!^cert .*!cert $wkd/$GESOVPN/server-$sv_fn/cert.pem!" \
     -e "s!^key .*!key $wkd/$GESOVPN/server-$sv_fn/key.pem!" \
     -e "s!^dh .*!dh $wkd/$GESOVPN/dh.pem!" \
+    -e "s!^tls-auth .*!tls-auth $wkd/$GESOVPN/server-$sv_fn/takey.pem!" \
     -e "s!^server .*!server $sv_wk $(cdr2mask $sv_mk)!" \
     -e "s!^ifconfig-pool-persist .*!ifconfig-pool-persist /var/log/ipp-$sv_fn.txt!" \
     -e "s!^client-config-dir .*!client-config-dir $wkd/$GESOVPN/server-$sv_fn/cld!" \
@@ -421,6 +424,9 @@ $(cat $GESOVPN/ca-$sv_ca/$cl_cn-key.pem)
 <ca>
 $(openssl x509 -in $GESOVPN/ca-$sv_ca/ca.pem)
 </ca>
+<tls-auth>
+$(cat $GESOVPN/server-$sv_fn/takey.pem)
+</tls-auth>
 EOF
 )
   { d=$opw/$cl_cn.ovpn ; echo "$x" >$d ; } || 
@@ -595,6 +601,8 @@ if [ ! -s $GESOVPN/dh.pem ]; then
   mkdir $GESOVPN/log 2>/dev/null
   exec 2>$log
   nice openssl dhparam -out $GESOVPN/dh.pem 2048 >&2 & gendh=$!
+  echo $'\nnet.ipv4.ip_forward=1' >> /etc/sysctl.d/net_openvpn.conf
+  sysctl net.ipv4.ip_forward=1 >&2
 else
   exec 2>$log
 fi
