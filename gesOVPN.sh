@@ -40,14 +40,14 @@ dvnom () {
 }
 
 systemd () {
-  systemctl daemon-reload > >(espera "Configuring systemd")
+  (systemctl daemon-reload >&2 || sleep 1) > >(espera "Configuring systemd")
 }
 start ()  {
-  service openvpn@$sv_fn start > >(espera "Starting server") ||
+  (sleep 1; service openvpn@$sv_fn start >&2 || service openvpn restart >&2) > >(espera "Starting server") ||
     error "Error starting server $sv_fn"
 }
 stop ()  {
-  service openvpn@$sv_fn stop  > >(espera "Stopping server")
+  (sleep 1; service openvpn@$sv_fn stop >&2) > >(espera "Stopping server")
 }
 
 haz_subj () {
@@ -365,7 +365,9 @@ cert --
 key --
 dh --
 tls-auth --
+topology net30
 server --
+push "route --
 crl-verify -- 'dir'
 ifconfig-pool-persist --
 client-config-dir --
@@ -390,6 +392,7 @@ EOF
     -e "s!^dh .*!dh $wkd/$GESOVPN/dh.pem!" \
     -e "s!^tls-auth .*!tls-auth $wkd/$GESOVPN/server-$sv_fn/takey.pem!" \
     -e "s!^server .*!server $sv_wk $(cdr2mask $sv_mk)!" \
+    -e "s!^push \"route.*!push \"route $sv_wk $(cdr2mask $sv_mk)\"!" \
     -e "s!^ifconfig-pool-persist .*!ifconfig-pool-persist /var/log/ipp-$sv_fn.txt!" \
     -e "s!^client-config-dir .*!client-config-dir $wkd/$GESOVPN/server-$sv_fn/cld!" \
     -e "s!^crl-verify .*!crl-verify $wkd/$GESOVPN/server-$sv_fn/block 'dir'!"
@@ -425,7 +428,7 @@ $(cat $GESOVPN/ca-$sv_ca/$cl_cn-key.pem)
 $(openssl x509 -in $GESOVPN/ca-$sv_ca/ca.pem)
 </ca>
 <tls-auth>
-$(cat $GESOVPN/server-$sv_fn/takey.pem)
+$(grep -v '^#' $GESOVPN/server-$sv_fn/takey.pem)
 </tls-auth>
 EOF
 )
@@ -637,9 +640,9 @@ while true; do
       ac=$(eval dialog --keep-tite --stdout --backtitle "'$BCKTIT'" \
               --title "'Action'" \
               --menu '"Select action for $sv_fn" 15 55 0' \
-                     $([ -f "$sv_fn.conf-disabled" ] && echo '"Enable server" ""') \
-                     $([ -f "$sv_fn.conf" ] && echo '"Reconfigure server" "" "Start server" "" "Stop server" "" "Disable server" ""') \
                      '"Manage CA clients" ""' \
+                     $([ -f "$sv_fn.conf-disabled" ] && echo '"Enable server" ""') \
+                     $([ -f "$sv_fn.conf" ] && echo '"Start server" "" "Stop server" "" "Disable server" "" "Reconfigure server" ""') \
                      '"Change CA password" ""')
       case ${ac:0:3} in
         Man) set_cli ;;
