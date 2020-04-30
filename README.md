@@ -16,7 +16,7 @@ chmod 700 /usr/local/sbin/gesovpn
 ```
 
 ### Debian, Ubuntu
-As _root_, run:
+This allows authomatic updates. As _root_, run:
 ```
 apt update
 apt install -y apt-transport-https ca-certificates wget gnupg
@@ -24,8 +24,7 @@ apt install -y apt-transport-https ca-certificates wget gnupg
 wget -qO - https://repo.mobelt.com/keyFile | apt-key add -
 echo 'deb https://repo.mobelt.com/all /' >/etc/apt/sources.list.d/mobelt.list
 apt update
-apt install -y gesovpn
- 
+apt install -y gesovpn 
 ```
 
 ## Features

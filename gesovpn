@@ -1,6 +1,6 @@
 #!/bin/bash
 
-VERSION=0.95
+VERSION=0.96
 
 # by mm AT nisu.org
 
@@ -193,7 +193,7 @@ set_ca () {
     fi
     break
   done
-  mkdir $GESOVPN/ca-$ca_n_fn 2>/dev/null
+  mkdir -p $GESOVPN/ca-$ca_n_fn/tmp 2>/dev/null
   nodes=''
   pwca=$(lee_nw_pw "Password for CA") || return 1
   [ "$pwca" == '---' ] && nodes='--nodes'
@@ -288,10 +288,9 @@ set_srv () {
     for f in $ls; do
       source $f/conf
       if [ "$sv_pc$sv_pt" == "$sv_n_pc$sv_n_pt" ] && [ "${f##*server-}" != "$sv_n_fn" ]; then
-        dialog --keep-tite --stdout --backtitle "$BCKTIT" \
-        --yesno "There exist another server with $sv_n_pc / $sv_n_pt"$'\n'"To keep this config you must manually bind server to local IP" 15 55 \
-        --title "Warning" &&
-          break || err=9 && continue 2
+        dialog --keep-tite --stdout --backtitle "$BCKTIT" --title "Warning" \
+          --yesno "There exist another server with $sv_n_pc / $sv_n_pt"$'\n'"To keep this config you must manually bind server to local IP" 15 55 &&
+         break || err=9 && continue 2
       fi
     done
     break
@@ -337,15 +336,29 @@ set_srv () {
     source $GESOVPN/ca-$sv_n_ca/conf || error "Unable to read CA conf"
     mk_conf
     lee_pwca || return 1
-    (openssl req -new -newkey rsa:2048 -keyout $GESOVPN/server-$sv_n_fn/key.pem -nodes \
+    rm -f $GESOVPN/ca-$sv_n_ca/tmp/*
+    if x=$(openssl req -new -newkey rsa:2048 -keyout $GESOVPN/ca-$sv_n_ca/tmp/key -nodes \
                  -subj "$(haz_subj sv_cn ca_o ca_ou ca_l ca_st ca_c)" \
-                 -out $GESOVPN/server-$sv_n_fn/req.pem >&2 &&
-     echo -n "$pwca" | openssl ca -batch -in $GESOVPN/server-$sv_n_fn/req.pem  \
-                -out $GESOVPN/server-$sv_n_fn/cert.pem -config $GESOVPN/openssl.cnf \
-                -passin stdin >&2
-    ) > >(espera "Generating Server cert") ||
-     { rm -rf $GESOVPN/server-$sv_n_fn ;
-      error "Error generating certificate"; }
+                 -out $GESOVPN/ca-$sv_n_ca/tmp/req 2>&1 &&
+           echo -n "$pwca" | openssl ca -batch -in $GESOVPN/ca-$sv_n_ca/tmp/req  \
+                -out /dev/null -config $GESOVPN/openssl.cnf \
+                -outdir $GESOVPN/ca-$sv_n_ca/tmp/ -passin stdin 2>&1
+          ) > >(espera "Generating Server cert") ; then
+      x=$(ls $GESOVPN/ca-$sv_n_ca/tmp/*.pem)
+      mv $x $GESOVPN/ca-$sv_n_ca/
+      x=${x##*/}; x=${x%.pem}
+      mv $GESOVPN/ca-$sv_n_ca/tmp/key $GESOVPN/ca-$sv_n_ca/$x.key.pem
+    else
+      if [ "${x/already/}" != "$x" ]; then
+        x=$(echo "$x" | sed -ne 's/^\s*Serial Number\s*:\s*//p')
+      else
+        echo "$x" >&2
+        rm -rf $GESOVPN/server-$sv_n_fn ;
+        error "Error generating certificate";
+      fi
+    fi
+    ln -s ../ca-$sv_n_ca/$x.pem $GESOVPN/server-$sv_n_fn/cert.pem
+    ln -s ../ca-$sv_n_ca/$x.key.pem $GESOVPN/server-$sv_n_fn/key.pem
   fi
   sv_fn=$sv_n_fn
   ls=$(ls -d $GESOVPN/server-* 2>/dev/null)
@@ -626,7 +639,7 @@ while true; do
             "---" "New server"
         )
     [ "$fn" ] || exit
-    sv_cn=''
+    sv_cn=''; sv_fn=''
     if [ "$fn" != "---" ] ; then
       sv_fn=$fn
       source $GESOVPN/server-$fn/conf || error "Config failed"
