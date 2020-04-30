@@ -6,13 +6,28 @@ It allows to manage servers, certification authorities and its clients.
 It is intended for users who do not want to struggle with technical details.
 
 ## Installation
-It requires to install `dialog`.
+
+### Manual
 As _root_, run:
 ```
-# git clone https://github.com/mdmvgithub/gesOVPN.git
-# mv gesOVPN/gesovpn /usr/local/sbin
-# chmod 700 /usr/local/sbin/gesovpn
+git clone https://github.com/mdmvgithub/gesOVPN.git
+mv gesOVPN/gesovpn /usr/local/sbin
+chmod 700 /usr/local/sbin/gesovpn
 ```
+
+### Debian, Ubuntu
+As _root_, run:
+```
+apt update
+apt install -y apt-transport-https ca-certificates wget gnupg
+
+wget -qO - https://repo.mobelt.com/keyFile | apt-key add -
+echo 'deb https://repo.mobelt.com/all /' >/etc/apt/sources.list.d/mobelt.list
+apt update
+apt install -y gesovpn
+ 
+```
+
 ## Features
 All functions are through menus, it is not necessary to use other commands.
 - Configure one o more servers, then enable, disable, start, stop them.
