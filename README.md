@@ -10,8 +10,8 @@ It requires to install `dialog`.
 As _root_, run:
 ```
 # git clone https://github.com/mdmvgithub/gesOVPN.git
-# mv gesOVPN/gesOVPN.sh /usr/local/sbin
-# chmod 700 /usr/local/sbin/gesOVPN.sh
+# mv gesOVPN/gesovpn /usr/local/sbin
+# chmod 700 /usr/local/sbin/gesovpn
 ```
 ## Features
 All functions are through menus, it is not necessary to use other commands.
@@ -22,7 +22,7 @@ All functions are through menus, it is not necessary to use other commands.
 - Block clients for a server.
 
 ## First use
-Just run `gesOVPN.sh`.
+Just run `gesovpn`.
 - It will show a form to set up basic settings for your server. 
 - The next form allows you to configure your certification authority (CA).
 - Then you can generate the `.ovpn` file for your first client.
@@ -30,6 +30,6 @@ Just run `gesOVPN.sh`.
 Be patient with the generation of the DH params.
 
 ## Next use
-Just run `gesOVPN.sh`. Now you can select an existing server or create one.
+Just run `gesovpn`. Now you can select an existing server or create one.
 Several servers can share the same CA.
 Certificate revocation is not contemplated, but clients can be selectively blocked for each server.
