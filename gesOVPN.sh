@@ -541,7 +541,7 @@ set_cli () {
             b=${sv_wk##*.}
             b2=${sv_wk%.$b}; b2=${b2##*.}
             p=${sv_wk%.$b2.$b}; ba=$[b2*256+b]
-            for ((i=ba+t-6; i >= ba+4 ; i+=4)); do
+            for ((i=ba+t-6; i >= ba+4 ; i-=4)); do
               ib2=$[i/256]
               ib=$[i%256]
               x=$p.$ib2.$ib
