@@ -437,10 +437,10 @@ client
 tls-client
 compress lz4
 <cert>
-$(openssl x509 -in $GESOVPN/ca-$sv_ca/$cl_cn-crt.pem)
+$(openssl x509 -in $GESOVPN/ca-$sv_ca/$cl.pem)
 </cert>
 <key>
-$(cat $GESOVPN/ca-$sv_ca/$cl_cn-key.pem)
+$(cat $GESOVPN/ca-$sv_ca/$cl.key.pem)
 </key>
 <ca>
 $(openssl x509 -in $GESOVPN/ca-$sv_ca/ca.pem)
@@ -457,20 +457,23 @@ EOF
 }
 
 gen_cli () {
+  local x
+
   cl_cn=$cn
   cl_ou="Client-$ca_cn"; cl_ou=${cl_ou:0:64}
-  (echo -n "$pwcl" | openssl req -new -newkey rsa:2048 -keyout $GESOVPN/ca-$ca_fn/$cn-key.pem \
+  (echo -n "$pwcl" | openssl req -new -newkey rsa:2048 -keyout $GESOVPN/ca-$ca_fn/tmp/key \
                -subj "$(haz_subj cl_cn ca_o cl_ou ca_l ca_st ca_c)" \
-               -out $GESOVPN/ca-$ca_fn/$cn-req.pem -passout stdin $nodes >&2 &&
-   echo -n "$pwca" | openssl ca -batch -in $GESOVPN/ca-$ca_fn/$cn-req.pem  \
-                -out $GESOVPN/ca-$ca_fn/$cn-crt.pem -config $GESOVPN/openssl.cnf \
-                -passin stdin >&2 
+               -out $GESOVPN/ca-$ca_fn/tmp/req -passout stdin $nodes >&2 &&
+   echo -n "$pwca" | openssl ca -batch -in $GESOVPN/ca-$ca_fn/tmp/req  \
+                -out /dev/null -config $GESOVPN/openssl.cnf \
+                -outdir $GESOVPN/ca-$ca_fn/tmp/ -passin stdin >&2 
   ) > >(espera "Generating Client cert") ||
-   { rm -f $GESOVPN/ca-$ca_fn/$cn-{crt,key,req}.pem
-    error "Error generating certificate"; }
-  rm $GESOVPN/ca-$ca_fn/$cn-req.pem
-  cl=$(openssl x509 -serial -noout -in $GESOVPN/ca-$ca_fn/$cn-crt.pem)
-  cl=${cl#*=}
+      error "Error generating certificate"
+  x=$(ls $GESOVPN/ca-$ca_fn/tmp/*.pem)
+  mv $x $GESOVPN/ca-$ca_fn/
+  x=${x##*/}; x=${x%.pem}
+  mv $GESOVPN/ca-$ca_fn/tmp/key $GESOVPN/ca-$ca_fn/$x.key.pem
+  cl=$x
   cons_ovpn  
 }
 
@@ -549,7 +552,7 @@ set_cli () {
             avisa "It will take effect when the client reconnects or when you restart server"
             ;;
         U)  rm -f $GESOVPN/server-$sv_fn/block/$[16#$cl] ;;
-        C)  local f=$GESOVPN/ca-$ca_fn/$cl_cn-key.pem
+        C)  local f=$GESOVPN/ca-$ca_fn/$cl.key.pem
             pwcl=$(lee_pw_pk $f "Client $cl_cn") || break
             pwcl2=$(lee_nw_pw "$cl_cn")
             camb_pw_pk "$pwcl" "$pwcl2" "$f"
@@ -737,4 +740,3 @@ while true; do
     set_cli
   fi
 done
-# TODO ver de quitar el err de set_svr
