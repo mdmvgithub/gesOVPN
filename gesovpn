@@ -1,6 +1,6 @@
 #!/bin/bash
 
-VERSION=0.96
+VERSION=0.97
 
 # by mm AT nisu.org
 
@@ -23,11 +23,16 @@ espera () {
 }
 
 clean () {
+  echo $1 | sed -e 's/[^0-9a-zA-Z\._ ]/_/g'
+}
+
+cleanf () {
   echo $1 | sed -e 's/[^0-9a-zA-Z\._]/_/g'
 }
+
 dvnom () {
   local p n s
-  n=$(clean $1)
+  n=$(cleanf $1)
   n=${n%.*}; n="$n."
   s=''
   while [ "$n" ]; do
@@ -43,7 +48,7 @@ systemd () {
   (systemctl daemon-reload >&2 || sleep 1) > >(espera "Configuring systemd")
 }
 start ()  {
-  (sleep 1; service openvpn@$sv_fn start >&2 || service openvpn restart >&2) > >(espera "Starting server") ||
+  (sleep 1; service openvpn@$sv_fn start >&2 || service openvpn restart >&2) > >(espera "Starting server") || 
     error "Error starting server $sv_fn"
 }
 stop ()  {
@@ -185,7 +190,7 @@ set_ca () {
       avisa "Country must be a TWO letter code" Error
       continue
     fi
-    ca_n_fn=$(clean $ca_n_fn)
+    ca_n_fn=$(cleanf $ca_n_fn)
     [ "$ca_n_fn" ] || return 1
     if [ ! "$ca_p_fn" ] && [ -d "$GESOVPN/ca-$ca_n_fn" ]; then
       avisa "CA friendly name already exists" Error
@@ -251,7 +256,7 @@ set_srv () {
       read -d$'\1' -r sv_n_fn sv_n_cn sv_n_pc sv_n_pt sv_n_wk sv_n_mk< <(echo "$x")
     fi
     [ "$sv_n_mk" ] || continue # miro el último
-    sv_n_fn=$(clean $sv_n_fn)
+    sv_n_fn=$(cleanf $sv_n_fn)
     [ "$sv_n_fn" ] || return 1
     if [ ! "$sv_p_fn" ] && [ -d "$GESOVPN/server-$sv_n_fn" ]; then
       avisa "Server friendly name already exists" Error
@@ -420,7 +425,7 @@ EOF
 }
 
 cons_ovpn() {
-  local x d
+  local x d f
   x=$(cat <<EOF
 remote $sv_cn $sv_pt $sv_pc
 nobind
@@ -445,9 +450,28 @@ $(grep -v '^#' $GESOVPN/server-$sv_fn/takey.pem)
 </tls-auth>
 EOF
 )
-  { d=$opw/$cl_cn.ovpn ; echo "$x" >$d ; } || 
-  { d=./$cl_cn.ovpn ; echo "$x" >$d ; }
+  f=$(cleanf $cl_cn.ovpn)
+  { d=$opw/$f ; echo "$x" >$d && chown --reference=$opw $d & } || 
+  { d=./$f ; echo "$x" >$d ; }
   avisa "The client file is in $d"$'\n\n'"Give it to the user and delete it"
+}
+
+gen_cli () {
+  cl_cn=$cn
+  cl_ou="Client-$ca_cn"; cl_ou=${cl_ou:0:64}
+  (echo -n "$pwcl" | openssl req -new -newkey rsa:2048 -keyout $GESOVPN/ca-$ca_fn/$cn-key.pem \
+               -subj "$(haz_subj cl_cn ca_o cl_ou ca_l ca_st ca_c)" \
+               -out $GESOVPN/ca-$ca_fn/$cn-req.pem -passout stdin $nodes >&2 &&
+   echo -n "$pwca" | openssl ca -batch -in $GESOVPN/ca-$ca_fn/$cn-req.pem  \
+                -out $GESOVPN/ca-$ca_fn/$cn-crt.pem -config $GESOVPN/openssl.cnf \
+                -passin stdin >&2 
+  ) > >(espera "Generating Client cert") ||
+   { rm -f $GESOVPN/ca-$ca_fn/$cn-{crt,key,req}.pem
+    error "Error generating certificate"; }
+  rm $GESOVPN/ca-$ca_fn/$cn-req.pem
+  cl=$(openssl x509 -serial -noout -in $GESOVPN/ca-$ca_fn/$cn-crt.pem)
+  cl=${cl#*=}
+  cons_ovpn  
 }
 
 set_cli () {
@@ -495,29 +519,16 @@ set_cli () {
                  ) || return 1
           [ "$pwcl" == "$pwcl2" ] && break
           err="*** Passwords mismatch ***"
+          nodes=''
         else
           nodes='--nodes'
           break
         fi
       done
-      cl_cn=$cn
-      cl_ou="Client-$ca_cn"; cl_ou=${cl_ou:0:64}
       ca_fn=$sv_ca
       mk_conf
       lee_pwca || return 1
-      (echo -n "$pwcl" | openssl req -new -newkey rsa:2048 -keyout $GESOVPN/ca-$ca_fn/$cn-key.pem \
-                   -subj "$(haz_subj cl_cn ca_o cl_ou ca_l ca_st ca_c)" \
-                   -out $GESOVPN/ca-$ca_fn/$cn-req.pem -passout stdin $nodes >&2 &&
-       echo -n "$pwca" | openssl ca -batch -in $GESOVPN/ca-$ca_fn/$cn-req.pem  \
-                    -out $GESOVPN/ca-$ca_fn/$cn-crt.pem -config $GESOVPN/openssl.cnf \
-                    -passin stdin >&2 
-      ) > >(espera "Generating Client cert") ||
-       { rm -f $GESOVPN/ca-$ca_fn/$cn-{crt,key,req}.pem
-        error "Error generating certificate"; }
-      rm $GESOVPN/ca-$ca_fn/$cn-req.pem
-      cl=$(openssl x509 -serial -noout -in $GESOVPN/ca-$ca_fn/$cn-crt.pem)
-      cl=${cl#*=}
-      cons_ovpn
+      gen_cli
       continue
     fi
     cl_cn=$(echo "$ll" | grep "$cl:!"); cl_cn=${cl_cn#*:!}
@@ -525,7 +536,7 @@ set_cli () {
       ac=$(eval dialog --keep-tite --stdout --backtitle "'$BCKTIT'" \
               --title '"Action for the client"' \
               --menu '"Select an action for the client $cl_cn"' 15 55 0 \
-                     '"Rebuid $cl_cn.ovpn" ""' \
+                     '"Rebuid $(cleanf $cl_cn).ovpn" ""' \
                      $([ -f $GESOVPN/server-$sv_fn/block/$[16#$cl] ] || echo '"Block for this server" ""') \
                      $([ -f $GESOVPN/server-$sv_fn/block/$[16#$cl] ] && echo '"Unblock for this server" ""') \
                      $([ -f $GESOVPN/server-$sv_fn/cld/$cl_cn ] || echo '"Static IP" ""') \
@@ -621,6 +632,49 @@ if [ ! -s $GESOVPN/dh.pem ]; then
   sysctl net.ipv4.ip_forward=1 >&2
 else
   exec 2>$log
+fi
+
+ar_i=0
+while true; do
+  case "$1" in
+    -sv )
+      if [ "$2" == '-list' ]; then
+        trap '' exit
+        for f in $(ls -d $GESOVPN/server-* 2>/dev/null); do
+          echo ${f#$GESOVPN/server-}
+        done
+        exit
+      fi
+      ar_sv=$(cleanf $2) ; shift 2 ;;
+    -cl ) ar_cl[$ar_i]=$(clean $2) ; ar_pw[$ar_i]=$3 ; ar_i=$[ar_i+1] ; shift 3 ;;
+    * ) break;;
+  esac
+done
+
+if [ "$ar_sv" ]; then
+  avisa () { echo $1 ; }
+  espera () { local x ; }
+  sv_fn=$ar_sv
+  source $GESOVPN/server-$sv_fn/conf || error "Config failed"
+  source $GESOVPN/ca-$sv_ca/conf || error "Unable to read CA conf"
+  ca_fn=$sv_ca
+  mk_conf
+  lee_pwca || return 1
+  for i in ${!ar_cl[*]} ; do
+    cn=${ar_cl[$i]}
+    pwcl=${ar_pw[$i]}
+    if [ "$pwcl" == '---' ]; then
+      nodes='--nodes'
+    else
+      nodes=''
+      if [ "${#pwcl}" -lt 8 ]; then
+        echo "Password for $cn too short (min 8)";
+        continue
+      fi
+    fi
+    gen_cli
+  done
+  exit
 fi
 
 while true; do 
