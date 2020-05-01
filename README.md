@@ -47,3 +47,9 @@ Be patient with the generation of the DH params.
 Just run `gesovpn`. Now you can select an existing server or create one.
 Several servers can share the same CA.
 Certificate revocation is not contemplated, but clients can be selectively blocked for each server.
+
+To generate clients, you can use the command line:
+```
+gesovpn -sv -list
+gesovpn -sv my_server -cl 'common name' 'password -cl 'another name' '---'
+```
