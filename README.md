@@ -16,7 +16,7 @@ chmod 700 /usr/local/sbin/gesovpn
 ```
 
 ### Debian, Ubuntu
-This allows authomatic updates. As _root_, run:
+This allows automatic updates. As _root_, run:
 ```
 apt update
 apt install -y apt-transport-https ca-certificates wget gnupg
