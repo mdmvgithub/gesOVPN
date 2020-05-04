@@ -48,7 +48,7 @@ systemd () {
   (systemctl daemon-reload >&2 || sleep 1) > >(espera "Configuring systemd")
 }
 start ()  {
-  (sleep 1; service openvpn@$sv_fn start >&2 || service openvpn restart >&2) > >(espera "Starting server") || 
+  (sleep 1; service openvpn@$sv_fn start >&2 || service openvpn restart >&2) > >(espera "Starting server") ||
     error "Error starting server $sv_fn"
 }
 stop ()  {
@@ -91,6 +91,7 @@ crl             = \$dir/crl.pem
 private_key     = \$dir/key.pem
 
 x509_extensions = usr_cert
+copy_extensions = copy
 
 name_opt        = ca_default
 cert_opt        = ca_default
@@ -343,7 +344,7 @@ set_srv () {
     lee_pwca || return 1
     rm -f $GESOVPN/ca-$sv_n_ca/tmp/*
     if x=$(openssl req -new -newkey rsa:2048 -keyout $GESOVPN/ca-$sv_n_ca/tmp/key -nodes \
-                 -subj "$(haz_subj sv_cn ca_o ca_ou ca_l ca_st ca_c)" \
+                 -subj "$(haz_subj sv_cn ca_o ca_ou ca_l ca_st ca_c)" -addext "subjectAltName = DNS:$sv_cn" \
                  -out $GESOVPN/ca-$sv_n_ca/tmp/req 2>&1 &&
            echo -n "$pwca" | openssl ca -batch -in $GESOVPN/ca-$sv_n_ca/tmp/req  \
                 -out /dev/null -config $GESOVPN/openssl.cnf \
@@ -487,12 +488,12 @@ set_cli () {
       cl=$(dialog --keep-tite --stdout --backtitle "$BCKTIT" \
             --title "List of CA clients" --default-item "$cl" \
             --menu "Select a client of $ca_fn" 15 55 0 \
+            "---" "New client" \
             $(for f in $ll ; do
                 echo ${f%%:!*}
                 echo ${f#*:!}
               done
-             ) \
-            "---" "New client"
+             )
           )
       [ "$cl" ] || return 1
     else
@@ -685,8 +686,8 @@ while true; do
   lc=$(ls -d $GESOVPN/ca-* 2>/dev/null)
   if [ "$ls" ]; then
     fn=$(dialog --keep-tite --stdout --backtitle "$BCKTIT" \
-            --title "Reconfigure server" \
-            --menu "Select a server to reconfigure" 15 55 0 \
+            --title "Manage server" \
+            --menu "Select a server to manage" 15 55 0 \
             $(for f in $ls ; do
                 source $f/conf
                 echo ${f#$GESOVPN/server-}
