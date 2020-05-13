@@ -1,6 +1,6 @@
 #!/bin/bash
 
-VERSION=0.97
+VERSION=0.98
 
 # by mm AT nisu.org
 
@@ -597,13 +597,34 @@ set_cli () {
   done
 }
 
+act_scr() {
+  local wg dw;
+
+  { command -v wget >/dev/null 2>&1 &&
+    wg='wget -qO -'
+  } || {
+    command -v curl >/dev/null 2>&1 &&
+    wg='curl -fsSL'
+  } || return 
+  dw=/tmp/dwgesovpn$$
+  eval $wg https://raw.githubusercontent.com/mdmvgithub/gesOVPN/master/gesovpn >$dw || return
+  nv=$(head -8 $dw | sed -ne 's/^VERSION=//p')
+  if [ "${nv/./}" -gt "${VERSION/./}" ] &&
+     dialog --keep-tite --stdout --backtitle "$BCKTIT" --title "Upgrade" \
+          --yesno $'There exist a nuw version of this program\nDo you want to upgrade now?' 15 55 ; then
+    chmod 700 $dw
+    chmod --reference=$0 $dw 2>/dev/null
+    mv $dw $0
+    exec $0
+  fi
+}
 
 IFS=$'\n'
 BCKTIT=${BCKTIT:-$(basename $0)}
 GESOVPN=${GESOVPN:-gesOVPN}
 [ "$EUID" -eq 0 ] ||
   { echo >&2 "You must be root."; exit 1; }
-for pg in dialog openvpn openssl ; do
+for pg in dialog openvpn openssl sed; do
   command -v $pg >/dev/null 2>&1 ||
     { echo >&2 "I require '$pg' but it's not installed. Aborting."; exit 1; }
 done
@@ -617,19 +638,24 @@ trap_exit () {
   [ "$gendh" ] && wait $gendh > >(espera $'Still generating DH params\nIt can take a lot of time')
   [ "$pendstart" ] && sv_fn=$pendstart && systemd && start
   stty icrnl onlcr icanon echo
-  echo Logs in $wkd/$log
+  [ "$log" ] && echo Logs in $log
 }
 trap trap_exit exit
-log=$GESOVPN/log/$(date +%Y-%m-%d)-$$.log
+log=/var/log/gesovpn
+mkdir $log 2>/dev/null
+if [ ! "$(find $log -type f -mtime -30)" ]; then
+  find $log -type f -mtime +180 -print0 | xargs -r -0 rm -f &
+  act_scr
+fi
+log=$log/$(date +%Y-%m-%d)-$$.log
 if [ ! -s $GESOVPN/dh.pem ]; then
   [ -d $GESOVPN ] || well=$'Welcome to the openvpn easy configurator\nNow you will setup your first server and your clients\n' || well=''
   dialog  --keep-tite --stdout --backtitle "$BCKTIT" \
     --title "Starting" \
-    --yesno "$well"$'\nI will generate DH params in background\nThis is done only once, but can take a long time' 10 55 ||
+    --yesno "$well"$'\nI will generate DH params in background\nThis is done only once, but can take a long time' 15 55 ||
    exit
   mkdir $GESOVPN 2>/dev/null
   chmod 700 $GESOVPN
-  mkdir $GESOVPN/log 2>/dev/null
   exec 2>$log
   nice openssl dhparam -out $GESOVPN/dh.pem 2048 >&2 & gendh=$!
   echo $'\nnet.ipv4.ip_forward=1' >> /etc/sysctl.d/net_openvpn.conf
@@ -651,6 +677,7 @@ while true; do
       fi
       ar_sv=$(cleanf $2) ; shift 2 ;;
     -cl ) ar_cl[$ar_i]=$(clean $2) ; ar_pw[$ar_i]=$3 ; ar_i=$[ar_i+1] ; shift 3 ;;
+    -up ) act_scr ;;
     * ) break;;
   esac
 done
