@@ -363,8 +363,8 @@ set_srv () {
         error "Error generating certificate";
       fi
     fi
-    ln -s ../ca-$sv_n_ca/$x.pem $GESOVPN/server-$sv_n_fn/cert.pem
-    ln -s ../ca-$sv_n_ca/$x.key.pem $GESOVPN/server-$sv_n_fn/key.pem
+    ln -sf ../ca-$sv_n_ca/$x.pem $GESOVPN/server-$sv_n_fn/cert.pem
+    ln -sf ../ca-$sv_n_ca/$x.key.pem $GESOVPN/server-$sv_n_fn/key.pem
   fi
   sv_fn=$sv_n_fn
   ls=$(ls -d $GESOVPN/server-* 2>/dev/null)
@@ -648,6 +648,7 @@ if [ ! "$(find $log -type f -mtime -30)" ]; then
   act_scr
 fi
 log=$log/$(date +%Y-%m-%d)-$$.log
+exec 2>$log
 if [ ! -s $GESOVPN/dh.pem ]; then
   [ -d $GESOVPN ] || well=$'Welcome to the openvpn easy configurator\nNow you will setup your first server and your clients\n' || well=''
   dialog  --keep-tite --stdout --backtitle "$BCKTIT" \
@@ -656,12 +657,9 @@ if [ ! -s $GESOVPN/dh.pem ]; then
    exit
   mkdir $GESOVPN 2>/dev/null
   chmod 700 $GESOVPN
-  exec 2>$log
   nice openssl dhparam -out $GESOVPN/dh.pem 2048 >&2 & gendh=$!
   echo $'\nnet.ipv4.ip_forward=1' >> /etc/sysctl.d/net_openvpn.conf
   sysctl net.ipv4.ip_forward=1 >&2
-else
-  exec 2>$log
 fi
 
 ar_i=0
