@@ -1,6 +1,6 @@
 #!/bin/bash
 
-VERSION=0.981
+VERSION=0.982
 
 # by mm AT nisu.org
 
@@ -426,7 +426,18 @@ EOF
 }
 
 cons_ovpn() {
-  local x d f
+  local x d f c k a t
+  c=$GESOVPN/ca-$sv_ca/$cl.pem
+  k=$GESOVPN/ca-$sv_ca/$cl.key.pem
+  a=$GESOVPN/ca-$sv_ca/ca.pem
+  t=$GESOVPN/server-$sv_fn/takey.pem
+  for x in c k a t; do
+    eval x=\$$x
+    if [ ! -f "$x" ]; then
+      avisa "Unable to find $x"
+      return
+    fi
+  done
   x=$(cat <<EOF
 remote $sv_cn $sv_pt $sv_pc
 nobind
@@ -438,16 +449,16 @@ client
 tls-client
 compress lz4
 <cert>
-$(openssl x509 -in $GESOVPN/ca-$sv_ca/$cl.pem)
+$(openssl x509 -in $c)
 </cert>
 <key>
-$(cat $GESOVPN/ca-$sv_ca/$cl.key.pem)
+$(cat $k)
 </key>
 <ca>
-$(openssl x509 -in $GESOVPN/ca-$sv_ca/ca.pem)
+$(openssl x509 -in $a)
 </ca>
 <tls-auth>
-$(grep -v '^#' $GESOVPN/server-$sv_fn/takey.pem)
+$(grep -v '^#' $t)
 </tls-auth>
 EOF
 )
