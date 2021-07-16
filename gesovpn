@@ -622,7 +622,7 @@ act_scr() {
   nv=$(head -8 $dw | sed -ne 's/^VERSION=//p')
   if [ "${nv/./}" -gt "${VERSION/./}" ] &&
      dialog --keep-tite --stdout --backtitle "$BCKTIT" --title "Upgrade" \
-          --yesno $'There exist a nuw version of this program\nDo you want to upgrade now?' 15 55 ; then
+          --yesno $'There exist a new version of this program\nDo you want to upgrade now?' 15 55 ; then
     chmod 700 $dw
     chmod --reference=$0 $dw 2>/dev/null
     mv $dw $0
