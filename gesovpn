@@ -372,7 +372,7 @@ set_srv () {
   fconf="$sv_fn.conf"
   [ -f "$fconf-disabled" ] && fconf="$fconf-disabled"
   if [ ! -f "$fconf" ]; then
-    openvpn --genkey --secret $GESOVPN/server-$sv_n_fn/takey.pem &
+    openvpn --genkey $GESOVPN/server-$sv_n_fn/takey.pem &
     cat >"$fconf" <<EOF
 status --
 log --
