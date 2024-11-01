@@ -1,6 +1,6 @@
 #!/bin/bash
 
-VERSION=0.982
+VERSION=0.983
 
 # by mm AT nisu.org
 
@@ -265,7 +265,7 @@ set_srv () {
     fi
     if ! echo "$sv_n_cn" | grep -q -P '(?=^.{4,253}$)(^(?:[a-zA-Z0-9](?:(?:[a-zA-Z0-9\-]){0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$)' &&
        ! echo "$sv_n_cn" | grep -E '(([0-9]{1,3})\.){3}([0-9]{1,3}){1}' | grep -q -vE '25[6-9]|2[6-9][0-9]|[3-9][0-9][0-9]' ; then
-      avisa "Enter vaid server name or IP" Error
+      avisa "Enter valid server name or IP" Error
       continue;
     fi
     if [ "$sv_n_pc" != tcp -a "$sv_n_pc" != udp ]; then
@@ -372,7 +372,7 @@ set_srv () {
   fconf="$sv_fn.conf"
   [ -f "$fconf-disabled" ] && fconf="$fconf-disabled"
   if [ ! -f "$fconf" ]; then
-    openvpn --genkey --secret $GESOVPN/server-$sv_n_fn/takey.pem &
+    openvpn --genkey secret $GESOVPN/server-$sv_n_fn/takey.pem &
     cat >"$fconf" <<EOF
 status --
 log --
@@ -489,6 +489,39 @@ gen_cli () {
   cons_ovpn  
 }
 
+comp_ip() {
+  local ci i t b b2 ba p ib ib2 ip='' ip1
+  ci=$(cd $GESOVPN/server-$sv_fn/cld
+       for f in * ; do
+         [ "$f" == "$cl_cn" ] || tr <$f '\n' ' '
+       done 2>/dev/null
+      )
+  t=$[1<<(32-$sv_mk)] # mitad de ips
+  b=${sv_wk##*.}
+  b2=${sv_wk%.$b}; b2=${b2##*.}
+  p=${sv_wk%.$b2.$b}; ba=$[b2*256+b]
+  for ((i=ba+t-6; i >= ba+4 ; i-=4)); do
+    ib2=$[i/256]
+    ib=$[i%256]
+    x=$p.$ib2.$ib
+    if [ "$ci" == "${ci/$x/}" ]; then
+      ip=$x
+      ip1=$p.$ib2.$[ib-1]
+      break;
+    fi
+  done
+  if [ ! "$ip" ]; then
+    avisa "Static pool exhausted, IP NOT defined" Error
+    echo 'Error'
+    return
+  fi
+  if [ "$i" -le $[ba+t/2] ]; then
+    avisa "You have consumed 1/2 of the total IP adress spectre" Warning
+  fi
+  echo "ifconfig-push $ip $ip1" >$GESOVPN/server-$sv_fn/cld/$cl_cn
+  echo $ip
+}
+
 set_cli () {
   local x nodes='' cl cn pwcl pwcl2 err;
   while true; do
@@ -570,36 +603,8 @@ set_cli () {
             camb_pw_pk "$pwcl" "$pwcl2" "$f"
             cons_ovpn
             ;;
-        S)  local ci i t b b2 ba p ib ib2 ip='' ip1
-            ci=$(cd $GESOVPN/server-$sv_fn/cld
-                 for f in * ; do
-                   [ "$f" == "$cl_cn" ] || tr <$f '\n' ' '
-                 done 2>/dev/null
-                )
-            t=$[1<<(32-$sv_mk)] # mitad de ips
-            b=${sv_wk##*.}
-            b2=${sv_wk%.$b}; b2=${b2##*.}
-            p=${sv_wk%.$b2.$b}; ba=$[b2*256+b]
-            for ((i=ba+t-6; i >= ba+4 ; i-=4)); do
-              ib2=$[i/256]
-              ib=$[i%256]
-              x=$p.$ib2.$ib
-              if [ "$ci" == "${ci/$x/}" ]; then
-                echo $x
-                ip=$x
-                ip1=$p.$ib2.$[ib-1]
-                break;
-              fi
-            done
-            if [ ! "$ip" ]; then
-              avisa "Static pool exhausted, IP NOT defined" Error
-              break
-            fi
-            if [ "$i" -le $[ba+t/2] ]; then
-              avisa "You have consumed 1/2 of the total IP adress spectre" Warning
-            fi
-            echo "ifconfig-push $ip $ip1" >$GESOVPN/server-$sv_fn/cld/$cl_cn
-            avisa "Static IP: $ip"
+        S)  ip=$(comp_ip)
+            [ "$ip" == 'Error' ] && break || avisa "Static IP for $cl_cn: $ip"
             ;;
         D)  rm -f $GESOVPN/server-$sv_fn/cld/$cl_cn;;
         *)  break;;
@@ -627,6 +632,8 @@ act_scr() {
     chmod --reference=$0 $dw 2>/dev/null
     mv $dw $0
     exec $0
+  else
+    rm -f $dw
   fi
 }
 
@@ -685,14 +692,14 @@ while true; do
         exit
       fi
       ar_sv=$(cleanf $2) ; shift 2 ;;
-    -cl ) ar_cl[$ar_i]=$(clean $2) ; ar_pw[$ar_i]=$3 ; ar_i=$[ar_i+1] ; shift 3 ;;
+    -cl ) ar_cl[$ar_i]=$(clean $2) ; ar_pw[$ar_i]=$3 ; ar_st[$ar_i]=$4 ; ar_i=$[ar_i+1] ; shift 3 ;;
     -up ) act_scr ;;
     * ) break;;
   esac
 done
 
 if [ "$ar_sv" ]; then
-  avisa () { echo $1 ; }
+  avisa () { echo "$1" ; }
   espera () { local x ; }
   sv_fn=$ar_sv
   source $GESOVPN/server-$sv_fn/conf || error "Config failed"
@@ -703,6 +710,7 @@ if [ "$ar_sv" ]; then
   for i in ${!ar_cl[*]} ; do
     cn=${ar_cl[$i]}
     pwcl=${ar_pw[$i]}
+    sta=${ar_st[$i]}
     if [ "$pwcl" == '---' ]; then
       nodes='--nodes'
     else
@@ -713,6 +721,11 @@ if [ "$ar_sv" ]; then
       fi
     fi
     gen_cli
+    if [ "$sta" = yes ]; then
+      ip=$(comp_ip)
+      [ "$ip" == 'Error' ] && break
+      avisa "IP for $cn=$ip"
+    fi
   done
   exit
 fi

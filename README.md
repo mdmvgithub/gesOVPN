@@ -51,5 +51,8 @@ Certificate revocation is not contemplated, but clients can be selectively block
 To generate clients, you can use the command line:
 ```
 gesovpn -sv -list
-gesovpn -sv my_server -cl 'common name' 'password' -cl 'another name' '---' -cl 'another' 'pwd min 8' ...
+```
+Select the server, i.e. my_server, and request common name, password, static ip (yes/no)
+```
+gesovpn -sv my_server -cl 'common_name' 'password' yes -cl 'another_name' '---' no -cl 'another' 'pwd min 8' no ...
 ```
