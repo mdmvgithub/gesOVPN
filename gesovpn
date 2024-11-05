@@ -1,6 +1,6 @@
 #!/bin/bash
 
-VERSION=0.983
+VERSION=0.984
 
 # by mm AT nisu.org
 
@@ -534,8 +534,10 @@ set_cli () {
             --menu "Select a client of $ca_fn" 15 55 0 \
             "---" "New client" \
             $(for f in $ll ; do
-                echo ${f%%:!*}
-                echo ${f#*:!}
+                cl=${f%%:!*}
+		cn=${f#*:!}
+                echo $cl
+                echo $cn $([ -f $GESOVPN/server-$sv_fn/block/$[16#$cl] ] && echo "Blocked") $([ -f $GESOVPN/server-$sv_fn/cld/$cn ] && echo "Static")
               done
              )
           )
@@ -585,10 +587,8 @@ set_cli () {
               --title '"Action for the client"' \
               --menu '"Select an action for the client $cl_cn"' 15 55 0 \
                      '"Rebuid $(cleanf $cl_cn).ovpn" ""' \
-                     $([ -f $GESOVPN/server-$sv_fn/block/$[16#$cl] ] || echo '"Block for this server" ""') \
-                     $([ -f $GESOVPN/server-$sv_fn/block/$[16#$cl] ] && echo '"Unblock for this server" ""') \
-                     $([ -f $GESOVPN/server-$sv_fn/cld/$cl_cn ] || echo '"Static IP" ""') \
-                     $([ -f $GESOVPN/server-$sv_fn/cld/$cl_cn ] && echo '"Dinamic IP" ""') \
+                     $([ -f $GESOVPN/server-$sv_fn/block/$[16#$cl] ] && echo '"Unblock for this server" ""' || echo '"Block for this server" ""') \
+                     $([ -f $GESOVPN/server-$sv_fn/cld/$cl_cn ] && echo '"Dinamic IP" ""' || echo '"Static IP" ""') \
                      '"Change password" ""'
           )
       case ${ac:0:1} in

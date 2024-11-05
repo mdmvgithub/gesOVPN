@@ -10,21 +10,8 @@ It is intended for users who do not want to struggle with technical details.
 ### Manual
 As _root_, run:
 ```
-git clone https://github.com/mdmvgithub/gesOVPN.git
-mv gesOVPN/gesovpn /usr/local/sbin
+curl -sfLo /usr/local/sbin/gesovpn https://raw.githubusercontent.com/mdmvgithub/gesOVPN/refs/heads/master/gesovpn
 chmod 700 /usr/local/sbin/gesovpn
-```
-
-### Debian, Ubuntu
-This allows automatic updates. As _root_, run:
-```
-apt update
-apt install -y apt-transport-https ca-certificates wget gnupg
-
-wget -qO - https://repo.mobelt.com/keyFile | apt-key add -
-echo 'deb https://repo.mobelt.com/all /' >/etc/apt/sources.list.d/mobelt.list
-apt update
-apt install -y gesovpn 
 ```
 
 ## Features
